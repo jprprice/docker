@@ -1,0 +1,65 @@
+# Define o número de nós
+VAGRANTFILE_API_VERSION = "2"
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+  # Configuração global para todas as VMs
+  config.vm.box = "ubuntu/bionic64"
+
+  #Master (Manager)
+  config.vm.define "master" do |master|
+    master.vm.hostname = "master"
+    master.vm.network "private_network", ip: "192.168.124.10"
+    master.vm.provider "virtualbox" do |vb|
+      vb.name = "master"
+      vb.memory = 1024
+      vb.cpus = 1
+    end
+    master.vm.provision "shell", inline: <<-SHELL
+      apt-get update
+      apt-get install -y docker.io
+      systemctl enable docker
+      docker swarm init --advertise-addr 192.168.56.10
+    SHELL
+  end
+
+  #Worker 1
+  config.vm.define "node1" do |node1|
+    node1.vm.hostname = "node1"
+    node1.vm.network "private_network", ip: "192.168.124.11"
+    node1.vm.provider "virtualbox" do |vb|
+      vb.name = "node1"
+      vb.memory = 1024
+      vb.cpus = 1
+    end
+    node1.vm.provision "shell", inline: <<-SHELL
+      apt-get update
+      apt-get install -y docker.io
+      systemctl enable docker
+    SHELL
+  end
+
+  #Worker 2
+  config.vm.define "node2" do |node2|
+    node2.vm.hostname = "node2"
+    node2.vm.network "private_network", ip: "192.168.124.12"
+    node2.vm.provider "virtualbox" do |vb|
+      vb.name = "node2"
+      vb.memory = 1024
+      vb.cpus = 1
+    end
+    node2.vm.provision "shell", inline: <<-SHELL
+      apt-get update
+      apt-get install -y docker.io
+      systemctl enable docker
+    SHELL
+  end
+
+  # Configuração para conectar os workers ao Swarm após o master inicializar
+  config.vm.provision "shell", run: "always", inline: <<-SHELL
+    if [[ "$(hostname)" == "node1" || "$(hostname)" == "node2" ]]; then
+      TOKEN=$(sshpass -p vagrant ssh -o StrictHostKeyChecking=no vagrant@192.168.56.10 "docker swarm join-token worker -q")
+      docker swarm join --token $TOKEN 192.168.56.10:2377
+    fi
+  SHELL
+end
+
